@@ -49,15 +49,14 @@ class ChatPanel(
     }
 
     private fun initBrowser() {
-        // 채팅 UI는 JCEF(내장 Chromium) 기반 — 미지원 환경에서는 빈 화면 대신 안내를 표시
-        val created = if (JBCefApp.isSupported()) {
-            try {
-                JBCefBrowser()
-            } catch (e: Exception) {
-                Logger.getInstance(ChatPanel::class.java).warn("JCEF browser creation failed", e)
-                null
-            }
-        } else null
+        // 채팅 UI는 JCEF(내장 Chromium) 기반 — 미지원 환경에서는 빈 화면 대신 안내를 표시.
+        // JCEF가 없는 런타임에서는 JBCefApp 클래스 초기화 자체가 Error를 던질 수 있어 Throwable로 방어
+        val created = try {
+            if (JBCefApp.isSupported()) JBCefBrowser() else null
+        } catch (e: Throwable) {
+            Logger.getInstance(ChatPanel::class.java).warn("JCEF unavailable: ${e.javaClass.simpleName}: ${e.message}")
+            null
+        }
 
         if (created == null) {
             mainPanel.add(buildJcefUnavailablePanel(), BorderLayout.CENTER)
