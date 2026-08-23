@@ -11,6 +11,7 @@ IDE의 Tool Window 안에서 kiro-cli와 대화하고, diff viewer, 에디터 �
 |------|------|
 | JetBrains IDE | 2025.1+ (IntelliJ IDEA, PyCharm, WebStorm 등) |
 | kiro-cli | 설치 필요 ([설치 가이드](https://kiro.dev/docs/cli/)) |
+| JCEF | 채팅 UI는 IDE 내장 Chromium(기본 번들)을 사용합니다. Linux에서는 glibc 2.28 이상이 필요하며, **Amazon Linux 2 등 오래된 배포판은 지원되지 않습니다** (우회: Remote Development + 로컬 JetBrains Client) |
 
 ## 설치
 

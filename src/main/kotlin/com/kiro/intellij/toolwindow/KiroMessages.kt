@@ -134,6 +134,11 @@ object KiroMessages {
         "chat.placeholder" to "메시지를 입력하세요... (# 파일, @ 에이전트, / 커맨드)",
         "chat.openFile" to "열린 파일",
         "chat.systemLog" to "시스템 로그",
+        "chat.jcefUnavailableTitle" to "채팅 UI를 표시할 수 없습니다",
+        "chat.jcefUnavailableDesc" to "채팅 화면은 IDE 내장 브라우저(JCEF/Chromium)로 렌더링되는데, 현재 환경에서 사용할 수 없습니다.",
+        "chat.jcefUnavailableHintRuntime" to "IDE가 JCEF가 포함된 JetBrains Runtime으로 실행 중인지 확인하세요 (Help → Find Action → 'Choose Boot Java Runtime for the IDE')",
+        "chat.jcefUnavailableHintLinux" to "Linux에서는 glibc 2.28 이상이 필요합니다 — Amazon Linux 2 등 오래된 배포판은 지원되지 않습니다",
+        "chat.jcefUnavailableHintRemote" to "대안: Remote Development로 이 머신을 backend로 두고 로컬 JetBrains Client에서 접속하면 사용할 수 있습니다",
         
         // Common
         "common.error" to "오류",
@@ -270,6 +275,11 @@ object KiroMessages {
         "chat.placeholder" to "Enter message... (# file, @ agent, / command)",
         "chat.openFile" to "Open file",
         "chat.systemLog" to "System log",
+        "chat.jcefUnavailableTitle" to "Chat UI cannot be displayed",
+        "chat.jcefUnavailableDesc" to "The chat interface is rendered with the IDE's embedded browser (JCEF/Chromium), which is not available in this environment.",
+        "chat.jcefUnavailableHintRuntime" to "Make sure the IDE runs on a JetBrains Runtime with JCEF (Help → Find Action → 'Choose Boot Java Runtime for the IDE')",
+        "chat.jcefUnavailableHintLinux" to "On Linux, JCEF requires glibc 2.28+ — older distributions such as Amazon Linux 2 are not supported",
+        "chat.jcefUnavailableHintRemote" to "Alternative: use Remote Development with this machine as the backend and a local JetBrains Client",
         
         // Common
         "common.error" to "Error",

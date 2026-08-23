@@ -3,15 +3,20 @@ package com.kiro.intellij.chat
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
+import com.intellij.util.ui.JBUI
 import com.kiro.intellij.settings.KiroSettings
 import java.awt.BorderLayout
 import java.util.UUID
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.SwingConstants
 
 class ChatPanel(
     private val project: Project,
@@ -44,8 +49,23 @@ class ChatPanel(
     }
 
     private fun initBrowser() {
+        // 채팅 UI는 JCEF(내장 Chromium) 기반 — 미지원 환경에서는 빈 화면 대신 안내를 표시
+        val created = if (JBCefApp.isSupported()) {
+            try {
+                JBCefBrowser()
+            } catch (e: Exception) {
+                Logger.getInstance(ChatPanel::class.java).warn("JCEF browser creation failed", e)
+                null
+            }
+        } else null
+
+        if (created == null) {
+            mainPanel.add(buildJcefUnavailablePanel(), BorderLayout.CENTER)
+            return
+        }
+
         val initialBodyClass = resolveInitialBodyClass()
-        browser = JBCefBrowser().also { b ->
+        browser = created.also { b ->
             Disposer.register(this, b)
             val html = buildHtml(backendServer.port, sessionId, initialBodyClass)
             backendServer.setSessionHtml(sessionId, html)
@@ -73,6 +93,29 @@ class ChatPanel(
         KiroSettings.onThemeChange(themeChangeCallback)
         Disposer.register(this) {
             KiroSettings.removeThemeListener(themeChangeCallback)
+        }
+    }
+
+    /** JCEF를 사용할 수 없는 환경(예: glibc가 오래된 Linux, JCEF 없는 런타임)용 안내 패널 */
+    private fun buildJcefUnavailablePanel(): JComponent {
+        val msg = com.kiro.intellij.toolwindow.KiroMessages
+        val html = """
+            <html><div style='width: 320px;'>
+            <h3>${msg["chat.jcefUnavailableTitle"]}</h3>
+            <p>${msg["chat.jcefUnavailableDesc"]}</p>
+            <ul>
+                <li>${msg["chat.jcefUnavailableHintRuntime"]}</li>
+                <li>${msg["chat.jcefUnavailableHintLinux"]}</li>
+                <li>${msg["chat.jcefUnavailableHintRemote"]}</li>
+            </ul>
+            </div></html>
+        """.trimIndent()
+        return JPanel(BorderLayout()).apply {
+            add(JBLabel(html).apply {
+                horizontalAlignment = SwingConstants.CENTER
+                verticalAlignment = SwingConstants.CENTER
+                border = JBUI.Borders.empty(24)
+            }, BorderLayout.CENTER)
         }
     }
 

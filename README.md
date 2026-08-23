@@ -11,6 +11,7 @@ Chat with kiro-cli directly inside your IDE, with diff viewer, editor context, a
 |------|---------|
 | JetBrains IDE | 2025.1+ (IntelliJ IDEA, PyCharm, WebStorm, etc.) |
 | kiro-cli | Required ([Install Guide](https://kiro.dev/docs/cli/)) |
+| JCEF | The chat UI uses the IDE's embedded Chromium (bundled by default). On Linux, glibc 2.28+ is required — older distributions such as **Amazon Linux 2 are not supported** (workaround: Remote Development with a local JetBrains Client) |
 
 ## Installation
 
