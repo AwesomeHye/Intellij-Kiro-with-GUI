@@ -131,9 +131,19 @@ object KiroMessages {
         "agent.createTitle" to "새 에이전트 생성",
         
         // Chat Panel
-        "chat.placeholder" to "메시지를 입력하세요... (# 파일, @ 에이전트, / 커맨드)",
+        "chat.placeholder" to "메시지를 입력하세요... (@ 파일/클래스/에이전트, / 커맨드)",
         "chat.openFile" to "열린 파일",
         "chat.systemLog" to "시스템 로그",
+        "chat.activity" to "작업 내역",
+        "chat.thinking" to "작업 중",
+        "chat.files" to "파일",
+        "chat.classes" to "클래스 · 심볼",
+        "chat.agents" to "에이전트",
+        "chat.filesChanged" to "변경된 파일",
+        "chat.viewDiff" to "변경 내용",
+        "chat.revert" to "되돌리기",
+        "chat.reverted" to "되돌림",
+        "chat.deleted" to "삭제됨",
         
         // Common
         "common.error" to "오류",
@@ -267,9 +277,19 @@ object KiroMessages {
         "agent.createTitle" to "Create New Agent",
         
         // Chat Panel
-        "chat.placeholder" to "Enter message... (# file, @ agent, / command)",
+        "chat.placeholder" to "Enter message... (@ file/class/agent, / command)",
         "chat.openFile" to "Open file",
         "chat.systemLog" to "System log",
+        "chat.activity" to "Activity",
+        "chat.thinking" to "Working",
+        "chat.files" to "Files",
+        "chat.classes" to "Classes & symbols",
+        "chat.agents" to "Agents",
+        "chat.filesChanged" to "Files changed",
+        "chat.viewDiff" to "Diff",
+        "chat.revert" to "Revert",
+        "chat.reverted" to "reverted",
+        "chat.deleted" to "deleted",
         
         // Common
         "common.error" to "Error",

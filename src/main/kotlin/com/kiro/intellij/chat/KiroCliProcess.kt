@@ -225,6 +225,24 @@ class KiroCliProcess(private val project: Project) {
         fun normalizeSystemLine(s: String): String = SPINNER_GLYPHS.replace(s, "")
 
         /**
+         * 도구 블록 시작 줄. kiro-cli는 도구를 쓸 때마다 `... (using tool: xxx)` 를 먼저 출력한다.
+         * 그 뒤에 오는 줄들(Purpose:, 명령 표준출력, 심볼 목록, diff 등)은 도구 활동이지 답변이 아니다.
+         */
+        fun startsToolBlock(raw: String): Boolean = raw.contains("(using tool:")
+
+        /** 도구 블록 종료 줄: ` - Completed in 0.4s` */
+        fun endsToolBlock(clean: String): Boolean = clean.trim().startsWith("- Completed in")
+
+        /**
+         * 어시스턴트 본문 줄. kiro-cli는 모델이 말하는 줄에만 `> ` 프롬프트 마커를 붙이므로
+         * 도구 출력과 답변을 구분하는 가장 확실한 신호다. (마커만 있는 빈 줄은 제외)
+         */
+        fun isAssistantLine(raw: String): Boolean {
+            val noAnsi = ANSI_REGEX.replace(raw, "").replace("\r", "")
+            return noAnsi.startsWith("> ") && noAnsi.trim().length > 1
+        }
+
+        /**
          * ANSI 원본 기반으로 시스템 로그 판별.
          * kiro-cli 출력 패턴:
          * - (using tool: xxx) → 도구 사용 표시
@@ -329,6 +347,10 @@ internal class OutputEmitter(private val onChunk: (String) -> Unit) {
     private var crPending = false
     private var lastSysNormalized: String? = null
 
+    /** `(using tool:)` 이후 `- Completed in` 까지의 줄은 도구 활동으로 취급한다. */
+    private var inToolBlock = false
+    private var toolBlockLines = 0
+
     fun feed(text: String) {
         for (c in text) {
             if (crPending) {
@@ -372,7 +394,28 @@ internal class OutputEmitter(private val onChunk: (String) -> Unit) {
         val clean = KiroCliProcess.stripAnsi(raw)
         if (clean.isBlank()) return
 
-        if (KiroCliProcess.isSystemOutput(raw)) {
+        // 어시스턴트 본문('> ' 마커)이 오면 도구 블록은 끝난 것으로 본다.
+        val assistant = KiroCliProcess.isAssistantLine(raw)
+        if (assistant) {
+            inToolBlock = false
+            toolBlockLines = 0
+        }
+
+        // 도구 블록 안의 줄은 패턴에 안 걸려도 활동(=시스템)으로 분류한다.
+        // 답변을 삼키는 사고를 막기 위해 블록 길이에 상한을 둔다.
+        val sys = !assistant && (KiroCliProcess.isSystemOutput(raw) || inToolBlock)
+
+        if (KiroCliProcess.startsToolBlock(raw)) {
+            inToolBlock = true
+            toolBlockLines = 0
+        } else if (inToolBlock) {
+            if (KiroCliProcess.endsToolBlock(clean) || ++toolBlockLines > MAX_TOOL_BLOCK_LINES) {
+                inToolBlock = false
+                toolBlockLines = 0
+            }
+        }
+
+        if (sys) {
             val normalized = KiroCliProcess.normalizeSystemLine(clean)
             if (normalized == lastSysNormalized) return // 같은 내용의 스피너 프레임 반복 억제
             lastSysNormalized = normalized
@@ -382,5 +425,10 @@ internal class OutputEmitter(private val onChunk: (String) -> Unit) {
             onChunk(clean)
         }
         hasOutput = true
+    }
+
+    private companion object {
+        /** 도구 블록이 비정상적으로 길어지면(종료 줄 미출력 등) 답변을 삼키지 않도록 강제 종료 */
+        const val MAX_TOOL_BLOCK_LINES = 500
     }
 }

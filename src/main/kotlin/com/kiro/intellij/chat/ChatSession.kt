@@ -18,6 +18,19 @@ class ChatSession(
     private var nextSeq = 1L
     private val lock = Any()
 
+    /**
+     * 이 턴이 시작된 시각. 파일을 되돌릴 때 "에이전트가 건드리기 전" 버전을 찾는 기준이 된다
+     * (IDE Local History에서 이 시각보다 앞선 마지막 리비전).
+     */
+    @Volatile
+    var turnStartMillis: Long = System.currentTimeMillis()
+        private set
+
+    /** 이 턴에 에이전트가 쓴 파일 경로 (중복 없이, 나온 순서대로) */
+    private val writtenFiles = LinkedHashSet<String>()
+
+    fun writtenFilesInTurn(): List<String> = synchronized(lock) { writtenFiles.toList() }
+
     var model: String?
         get() = cliProcess.model
         set(value) { cliProcess.model = value }
@@ -35,12 +48,17 @@ class ChatSession(
     }
 
     fun sendMessage(message: String) {
+        synchronized(lock) {
+            turnStartMillis = System.currentTimeMillis()
+            writtenFiles.clear()
+        }
         appendEvent("start", "")
 
         cliProcess.sendMessage(
             message = message,
             onChunk = { chunk ->
                 appendEvent("chunk", chunk)
+                detectFileWrite(chunk)
             },
             onDone = {
                 appendEvent("done", "")
@@ -49,6 +67,17 @@ class ChatSession(
                 appendEvent("error", error)
             }
         )
+    }
+
+    /**
+     * 활동 로그([SYS]) 줄에서 쓰기 대상 파일을 찾아 별도 이벤트로 알린다.
+     * webview는 이 이벤트로 "diff 보기 / 되돌리기" 줄을 그린다.
+     */
+    private fun detectFileWrite(chunk: String) {
+        if (!chunk.startsWith(SYS_PREFIX)) return
+        val path = FileWriteDetector.extractPath(chunk.removePrefix(SYS_PREFIX)) ?: return
+        val isNew = synchronized(lock) { writtenFiles.add(path) }
+        if (isNew) appendEvent("file", path)
     }
 
     fun stopGeneration() {
@@ -62,5 +91,6 @@ class ChatSession(
 
     companion object {
         private const val MAX_EVENTS = 5000
+        private const val SYS_PREFIX = "[SYS]"
     }
 }

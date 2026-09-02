@@ -4,23 +4,29 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 
 /**
- * 파일 검색 로직 테스트
+ * 파일 검색 로직 테스트.
+ * 예전 버전은 필터/정렬을 테스트 안에 복사해 두고 그 복사본을 검증했다(= 프로덕션 코드는
+ * 한 줄도 실행되지 않았다). 지금은 ChatBackendServer가 실제로 쓰는 ProjectFileSearch를 직접 호출한다.
  */
 class FileSearchTest {
 
-    private data class ProjectFileInfo(val name: String, val path: String, val dir: String, val ext: String)
+    private fun info(name: String, path: String) =
+        ProjectFileInfo(name, path, path.substringBeforeLast("/", ""), path.substringAfterLast('.', ""))
+
+    private fun filter(files: List<ProjectFileInfo>, query: String) =
+        files.filter { ProjectFileSearch.matches(it, query) }
 
     @Test
     fun `filter files by name`() {
         val files = listOf(
-            ProjectFileInfo("ChatPanel.kt", "src/main/kotlin/chat/ChatPanel.kt", "src/main/kotlin/chat", "kt"),
-            ProjectFileInfo("ChatSession.kt", "src/main/kotlin/chat/ChatSession.kt", "src/main/kotlin/chat", "kt"),
-            ProjectFileInfo("Settings.kt", "src/main/kotlin/settings/Settings.kt", "src/main/kotlin/settings", "kt")
+            info("ChatPanel.kt", "src/main/kotlin/chat/ChatPanel.kt"),
+            info("ChatSession.kt", "src/main/kotlin/chat/ChatSession.kt"),
+            info("Settings.kt", "src/main/kotlin/settings/Settings.kt")
         )
-        
-        val query = "chat"
-        val matches = filterFiles(files, query)
-        
+
+        val matches = filter(files, "chat")
+
+        // Settings.kt도 경로에 'chat'이 없으니 제외된다
         assertEquals(2, matches.size)
         assertTrue(matches.all { it.name.lowercase().contains("chat") })
     }
@@ -28,13 +34,12 @@ class FileSearchTest {
     @Test
     fun `filter files by path`() {
         val files = listOf(
-            ProjectFileInfo("Panel.kt", "src/main/kotlin/chat/Panel.kt", "src/main/kotlin/chat", "kt"),
-            ProjectFileInfo("Panel.kt", "src/main/kotlin/settings/Panel.kt", "src/main/kotlin/settings", "kt")
+            info("Panel.kt", "src/main/kotlin/chat/Panel.kt"),
+            info("Panel.kt", "src/main/kotlin/settings/Panel.kt")
         )
-        
-        val query = "settings"
-        val matches = filterFiles(files, query)
-        
+
+        val matches = filter(files, "settings")
+
         assertEquals(1, matches.size)
         assertEquals("src/main/kotlin/settings/Panel.kt", matches[0].path)
     }
@@ -42,83 +47,137 @@ class FileSearchTest {
     @Test
     fun `sort by name match priority`() {
         val files = listOf(
-            ProjectFileInfo("AChat.kt", "src/AChat.kt", "src", "kt"),
-            ProjectFileInfo("ChatPanel.kt", "src/ChatPanel.kt", "src", "kt"),
-            ProjectFileInfo("MyChat.kt", "src/MyChat.kt", "src", "kt")
+            info("AChat.kt", "src/AChat.kt"),
+            info("ChatPanel.kt", "src/ChatPanel.kt"),
+            info("MyChat.kt", "src/MyChat.kt")
         )
-        
-        val query = "chat"
-        val sorted = sortFiles(files, query)
-        
-        // ChatPanel.kt가 첫 번째 (chat으로 시작)
+
+        val sorted = ProjectFileSearch.sort(files, "chat")
+
         assertEquals("ChatPanel.kt", sorted[0].name)
     }
 
     @Test
-    fun `empty query returns all files`() {
+    fun `shorter names win when both start with the query`() {
         val files = listOf(
-            ProjectFileInfo("A.kt", "src/A.kt", "src", "kt"),
-            ProjectFileInfo("B.kt", "src/B.kt", "src", "kt")
+            info("ChatBackendServer.kt", "src/ChatBackendServer.kt"),
+            info("Chat.kt", "src/Chat.kt")
         )
-        
-        val matches = filterFiles(files, "")
-        
-        assertEquals(2, matches.size)
+
+        val sorted = ProjectFileSearch.sort(files, "chat")
+
+        assertEquals("Chat.kt", sorted[0].name)
+    }
+
+    @Test
+    fun `empty query matches everything and sorts by name`() {
+        val files = listOf(info("B.kt", "src/B.kt"), info("A.kt", "src/A.kt"))
+
+        assertEquals(2, filter(files, "").size)
+        assertEquals("A.kt", ProjectFileSearch.sort(files, "").first().name)
     }
 
     @Test
     fun `case insensitive search`() {
         val files = listOf(
-            ProjectFileInfo("ChatPanel.kt", "src/ChatPanel.kt", "src", "kt"),
-            ProjectFileInfo("chatSession.kt", "src/chatSession.kt", "src", "kt")
+            info("ChatPanel.kt", "src/ChatPanel.kt"),
+            info("chatSession.kt", "src/chatSession.kt")
         )
-        
-        val matches = filterFiles(files, "CHAT")
-        
-        assertEquals(2, matches.size)
-    }
 
-    @Test
-    fun `limit results to max count`() {
-        val files = (1..100).map { 
-            ProjectFileInfo("File$it.kt", "src/File$it.kt", "src", "kt") 
-        }
-        
-        val matches = filterFiles(files, "file").take(15)
-        
-        assertEquals(15, matches.size)
+        assertEquals(2, filter(files, "CHAT").size)
     }
 
     @Test
     fun `fuzzy match partial name`() {
         val files = listOf(
-            ProjectFileInfo("ChatBackendServer.kt", "src/ChatBackendServer.kt", "src", "kt"),
-            ProjectFileInfo("ChatPanel.kt", "src/ChatPanel.kt", "src", "kt")
+            info("ChatBackendServer.kt", "src/ChatBackendServer.kt"),
+            info("ChatPanel.kt", "src/ChatPanel.kt")
         )
-        
-        val matches = filterFiles(files, "backend")
-        
+
+        val matches = filter(files, "backend")
+
         assertEquals(1, matches.size)
         assertEquals("ChatBackendServer.kt", matches[0].name)
     }
 
-    // 테스트용 필터 함수 (ChatBackendServer의 로직과 동일)
-    private fun filterFiles(files: List<ProjectFileInfo>, query: String): List<ProjectFileInfo> {
-        if (query.isEmpty()) return files
-        val q = query.lowercase()
-        return files.filter { f ->
-            f.name.lowercase().contains(q) || f.path.lowercase().contains(q)
-        }
+    @Test
+    fun `path queries bypass the name index`() {
+        // 'com/acme'처럼 '/'가 있으면 파일명 인덱스로는 못 찾으므로 전체 순회로 내려가야 한다
+        assertTrue(ProjectFileSearch.isPathQuery("com/acme"))
+        assertTrue(ProjectFileSearch.isPathQuery("src/main"))
+        assertFalse(ProjectFileSearch.isPathQuery("MainController"))
+        assertFalse(ProjectFileSearch.isPathQuery(""))
     }
 
-    // 테스트용 정렬 함수 (ChatBackendServer의 로직과 동일)
-    private fun sortFiles(files: List<ProjectFileInfo>, query: String): List<ProjectFileInfo> {
-        if (query.isEmpty()) return files.sortedBy { it.name.lowercase() }
-        val q = query.lowercase()
-        return files.sortedWith(compareBy(
-            { !it.name.lowercase().startsWith(q) },
-            { !it.name.lowercase().contains(q) },
-            { it.name.lowercase() }
-        ))
+    @Test
+    fun `name candidates are ranked by prefix then length`() {
+        val names = listOf("MyMainWindow.java", "Main.java", "MainController.java")
+
+        val sorted = ProjectFileSearch.sortNames(names, "main")
+
+        assertEquals(listOf("Main.java", "MainController.java", "MyMainWindow.java"), sorted)
+    }
+
+    @Test
+    fun `relativePath strips the project base path`() {
+        assertEquals(
+            "src/main/java/Main.java",
+            ProjectFileSearch.relativePath("/home/u/proj/src/main/java/Main.java", "/home/u/proj")
+        )
+        // 프로젝트 밖의 파일은 절대 경로를 그대로 둔다
+        assertEquals("/opt/other/File.kt", ProjectFileSearch.relativePath("/opt/other/File.kt", "/home/u/proj"))
+    }
+
+    @Test
+    fun `toInfo derives dir and extension`() {
+        val i = ProjectFileSearch.toInfo("Main.java", "/home/u/proj/src/com/acme/Main.java", "java", "/home/u/proj")
+
+        assertEquals("Main.java", i.name)
+        assertEquals("src/com/acme/Main.java", i.path)
+        assertEquals("src/com/acme", i.dir)
+        assertEquals("java", i.ext)
+    }
+
+    @Test
+    fun `toInfo handles a file at the project root`() {
+        val i = ProjectFileSearch.toInfo("README.md", "/home/u/proj/README.md", "md", "/home/u/proj")
+
+        assertEquals("", i.dir)
+        assertEquals("README.md", i.path)
+    }
+
+    @Test
+    fun `compiled class files are never listed`() {
+        // el motivo: .class sale junto a su .java y duplica la lista, y el CLI no lo puede leer
+        assertFalse(ProjectFileSearch.isMentionable("class", true))
+        assertFalse(ProjectFileSearch.isMentionable("class", false)) // aunque el IDE no lo marque binario
+        assertFalse(ProjectFileSearch.isMentionable("CLASS", false)) // case insensitive
+        assertTrue(ProjectFileSearch.isMentionable("java", false))
+        assertTrue(ProjectFileSearch.isMentionable("kt", false))
+    }
+
+    @Test
+    fun `archives and native artifacts are not listed`() {
+        listOf("jar", "war", "ear", "aar", "so", "dll", "dylib", "exe", "pyc", "zip", "gz")
+            .forEach { assertFalse(ProjectFileSearch.isMentionable(it, false), "$it should be filtered out") }
+    }
+
+    @Test
+    fun `binary files are not listed even with an unknown extension`() {
+        assertFalse(ProjectFileSearch.isMentionable("weird", true))
+        assertTrue(ProjectFileSearch.isMentionable("weird", false))
+    }
+
+    @Test
+    fun `text files without extension stay listed`() {
+        // Dockerfile, Makefile, LICENSE...
+        assertTrue(ProjectFileSearch.isMentionable(null, false))
+        assertTrue(ProjectFileSearch.isMentionable("", false))
+    }
+
+    @Test
+    fun `limit constants keep the payload bounded`() {
+        assertTrue(ProjectFileSearch.RESULT_LIMIT in 1..200)
+        assertTrue(ProjectFileSearch.NAME_CANDIDATE_LIMIT >= ProjectFileSearch.RESULT_LIMIT)
     }
 }

@@ -249,7 +249,7 @@ body {
 }
 .msg-wrap:hover .copy-btn { opacity: 1; }
 .msg-wrap .copy-btn:hover { color: var(--fg); background: var(--copy-btn-hover-bg); }
-.sys-toggle { align-self: flex-start; max-width: 95%; margin: 2px 0; }
+.sys-toggle { align-self: flex-start; max-width: 95%; margin: 2px 0; width: 95%; }
 .sys-toggle summary {
     font-size: 11px; color: var(--fg-muted); cursor: pointer; padding: 2px 8px;
     list-style: none; user-select: none;
@@ -257,10 +257,69 @@ body {
 .sys-toggle summary::-webkit-details-marker { display: none; }
 .sys-toggle summary::before { content: '▶ '; font-size: 9px; }
 .sys-toggle[open] summary::before { content: '▼ '; font-size: 9px; }
-.sys-toggle .sys-log-content {
-    font-size: 11px; color: var(--fg-faint); padding: 2px 8px 4px 16px;
-    font-family: 'JetBrains Mono', monospace; white-space: pre-wrap;
+/* activity trace (live agent steps) */
+.sys-toggle.activity { border-left: 2px solid var(--border); padding-left: 2px; }
+.sys-toggle.activity[data-live="1"] { border-left-color: var(--accent); }
+.sys-toggle.activity summary .act-summary-label { font-weight: 600; }
+.sys-toggle.activity summary .act-summary-step {
+    color: var(--fg-faint); margin-left: 6px;
+    display: inline-block; max-width: 60%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
 }
+.act-list { padding: 2px 8px 6px 10px; display: flex; flex-direction: column; gap: 3px; }
+.act-item { font-size: 11.5px; color: var(--fg-muted); display: flex; gap: 6px; align-items: baseline; }
+.act-item .act-icon { flex: 0 0 auto; width: 14px; text-align: center; opacity: 0.9; }
+.act-item .act-text { flex: 1 1 auto; word-break: break-word; }
+.act-item .act-text code {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    background: var(--code-bg, rgba(128,128,128,0.12)); padding: 0 3px; border-radius: 3px;
+}
+.act-item.act-running .act-text { color: var(--fg); }
+.act-item .act-time { color: var(--fg-faint); font-size: 10.5px; margin-left: 4px; white-space: nowrap; }
+.act-item .act-purpose { color: var(--fg-faint); font-style: italic; }
+.act-raw {
+    margin: 1px 0 3px 20px; padding: 3px 6px; max-height: 140px; overflow: auto;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.35;
+    color: var(--fg-faint); background: rgba(128,128,128,0.07); border-radius: 4px;
+    white-space: pre-wrap; word-break: break-word;
+}
+.act-live-dots { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
+.act-live-dots span {
+    width: 3px; height: 3px; border-radius: 50%; background: var(--accent);
+    animation: act-blink 1.2s infinite ease-in-out;
+}
+.act-live-dots span:nth-child(2) { animation-delay: 0.2s; }
+.act-live-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes act-blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+/* files the agent wrote in this turn */
+.file-changes {
+    align-self: flex-start; width: 95%; max-width: 95%; margin: 4px 0;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.file-changes .fc-head {
+    font-size: 11px; font-weight: 600; color: var(--fg-muted);
+    padding: 4px 10px; background: rgba(128,128,128,0.08);
+}
+.fc-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 10px; font-size: 12px; border-top: 1px solid var(--border);
+}
+.fc-item .fc-name { font-weight: 600; color: var(--fg); white-space: nowrap; }
+.fc-item .fc-dir {
+    color: var(--fg-faint); font-size: 10.5px; flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fc-item .fc-status { font-size: 10.5px; color: var(--fg-faint); }
+.fc-item .fc-status.fc-status-error { color: var(--danger); }
+.fc-item.fc-reverted .fc-name { text-decoration: line-through; color: var(--fg-faint); }
+.fc-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+.fc-btn {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+    background: var(--menu-bg); color: var(--fg); border: 1px solid var(--border);
+}
+.fc-btn:hover:not(:disabled) { background: var(--menu-hover-bg); }
+.fc-btn:disabled { opacity: 0.45; cursor: default; }
+.fc-btn.fc-danger { color: var(--danger); border-color: var(--danger); }
 #image-preview { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px 12px; background: var(--preview-bg); }
 #image-preview:empty { display: none; }
 #image-preview img { max-height: 60px; border-radius: 4px; border: 1px solid var(--preview-border); }
@@ -317,6 +376,10 @@ body {
 .inline-badge.agent {
     background: var(--badge-agent-bg); color: var(--badge-agent-fg);
     border: 1px solid var(--badge-agent-border);
+}
+.inline-badge.symbol {
+    background: var(--badge-file-bg); color: var(--badge-file-fg);
+    border: 1px dashed var(--badge-file-border);
 }
 /* toolbar */
 #input-toolbar {
@@ -378,6 +441,12 @@ body {
 #autocomplete .ac-secondary { font-size: 10px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #autocomplete .ac-item.selected .ac-secondary { color: var(--fg-faint); }
 #autocomplete .ac-match { color: #e8a838; font-weight: 600; }
+#autocomplete .ac-section {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--fg-faint); padding: 5px 10px 2px; user-select: none;
+    position: sticky; top: 0; background: var(--menu-bg);
+}
+#autocomplete .ac-section:not(:first-child) { border-top: 1px solid var(--menu-border); margin-top: 2px; }
 /* context tags area - unused */
 #context-tags { display: none; }
 .typing-indicator { display: inline-flex; gap: 4px; padding: 4px 0; }
@@ -447,6 +516,9 @@ let currentAssistantDiv = null;
 let currentContent = '';
 let currentAssistantWrap = null;
 let currentSysToggle = null;
+let currentActivityItem = null;
+let currentActivityRaw = null;
+let currentFileBlock = null;
 let sysLogCount = 0;
 let openFiles = [];
 let excludedPaths = new Set();
@@ -555,10 +627,8 @@ function handleKey(e) {
             const item = items[acSelectedIndex];
             if (acType === 'command') {
                 insertCommandAutocomplete(item.dataset.cmd);
-            } else if (acType === 'file') {
-                insertFileContext(item.dataset.path, item.dataset.name);
-            } else if (acType === 'agent') {
-                insertAgentContext(item.dataset.name);
+            } else if (acType === 'mention') {
+                insertMention(item.dataset.mtype, item.dataset.value, item.dataset.display);
             }
             return;
         }
@@ -577,7 +647,8 @@ function getInputText() {
             if (node.classList.contains('inline-badge')) {
                 const type = node.dataset.type;
                 const name = node.dataset.name;
-                text += (type === 'file' ? '#' : '@') + name;
+                // the CLI expands '@<path>' / '@<agent>'; '#<path>' is ignored by it
+                text += '@' + name;
             } else {
                 text += node.textContent;
             }
@@ -643,6 +714,8 @@ let typingIndicator = null;
 
 function startAssistantMessage() {
     currentContent = ''; sysLogCount = 0; currentSysToggle = null;
+    currentActivityItem = null; currentActivityRaw = null;
+    currentFileBlock = null;
     currentAssistantWrap = null;
     currentAssistantDiv = null;
     typingIndicator = document.createElement('div');
@@ -819,6 +892,274 @@ function simpleMarkdown(text) {
     return html;
 }
 
+// ---- activity trace (live agent steps) -------------------------------------
+const TOOL_ICONS = {
+    shell: '▶', execute_bash: '▶', bash: '▶', cmd: '▶',
+    read: '📖', fs_read: '📖', file_read: '📖',
+    write: '✍', fs_write: '✍', file_write: '✍', edit: '✍',
+    code: '🔍', search: '🔍', grep: '🔍', glob: '🔍',
+    use_aws: '☁', aws: '☁',
+    browser: '🌐', web: '🌐', fetch: '🌐',
+    introspect: '💭', knowledge: '📚', spawn: '🤖'
+};
+
+function toolIcon(name) {
+    const key = String(name || '').toLowerCase().trim();
+    if (TOOL_ICONS[key]) return TOOL_ICONS[key];
+    for (const k in TOOL_ICONS) {
+        if (key.indexOf(k) !== -1) return TOOL_ICONS[k];
+    }
+    return '🔧';
+}
+
+// One [SYS] line -> structured event. Mirrors the patterns KiroCliProcess.isSystemOutput detects.
+function parseActivity(text) {
+    const t = String(text).trim();
+    if (!t) return { kind: 'skip' };
+
+    const m = t.match(/^(.*?)\s*\(using tool:\s*([^)]+)\)\s*$/);
+    if (m) {
+        const tool = m[2].trim();
+        return { kind: 'tool', icon: toolIcon(tool), label: m[1].trim() || ('Tool: ' + tool) };
+    }
+    if (/^-\s*Completed in/i.test(t)) return { kind: 'done', label: t.replace(/^-\s*/, '') };
+    if (/^(Purpose|목적)\s*:/i.test(t)) return { kind: 'purpose', label: t.replace(/^[^:]*:\s*/, '') };
+    if (/^(✓|✔|●|✗|✘)/.test(t)) return { kind: 'ok', icon: t.charAt(0), label: t.substring(1).trim() };
+    if (/^(Searching for symbols|Looking up symbols|Found\s+\d+\s+of\s+\d+\s+symbols)/i.test(t)) {
+        return { kind: 'step', icon: '🔍', label: t };
+    }
+    if (/^Reading (file|directory|multiple)/i.test(t)) return { kind: 'step', icon: '📖', label: t };
+    if (/^(Creating|Updating|Writing|Appending|Replacing)\b/i.test(t)) return { kind: 'step', icon: '✍', label: t };
+    if (/(▸\s*Time:|Credits:)/.test(t)) return { kind: 'meta', label: t.replace(/^[▸\s]*/, '') };
+    if (/Loading\.\.\.|^Thinking/i.test(t)) return { kind: 'skip' };
+    return { kind: 'raw', label: t };
+}
+
+// Highlight quoted strings and path-like tokens inside an activity label.
+function activityLabelHtml(label) {
+    let html = escapeHtml(String(label));
+    html = html.replace(/"([^"]{1,160})"/g, function (whole, inner) {
+        return '<code>' + inner + '</code>';
+    });
+    html = html.replace(/(^|\s)((?:\/|~\/|\.\/)[^\s,;:]{2,160})/g, function (whole, pre, path) {
+        return pre + '<code>' + path + '</code>';
+    });
+    return html;
+}
+
+function activityTitle(live) {
+    if (live) return i18n.thinking || 'Working';
+    return i18n.activity || i18n.systemLog || 'Activity';
+}
+
+function ensureActivityBlock() {
+    if (currentSysToggle) return currentSysToggle;
+    currentSysToggle = document.createElement('details');
+    currentSysToggle.className = 'sys-toggle activity';
+    currentSysToggle.dataset.live = '1';
+    currentSysToggle.open = true; // auto-expand while the agent is working
+    const summary = document.createElement('summary');
+    const label = document.createElement('span');
+    label.className = 'act-summary-label';
+    const step = document.createElement('span');
+    step.className = 'act-summary-step';
+    summary.appendChild(label);
+    summary.appendChild(step);
+    currentSysToggle.appendChild(summary);
+    const list = document.createElement('div');
+    list.className = 'act-list';
+    currentSysToggle.appendChild(list);
+    messagesDiv.appendChild(currentSysToggle);
+    return currentSysToggle;
+}
+
+function updateActivitySummary(stepText) {
+    if (!currentSysToggle) return;
+    const live = currentSysToggle.dataset.live === '1';
+    const label = currentSysToggle.querySelector('.act-summary-label');
+    const step = currentSysToggle.querySelector('.act-summary-step');
+    label.textContent = activityTitle(live) + (sysLogCount ? ' (' + sysLogCount + ')' : '');
+    if (live) {
+        const dots = document.createElement('span');
+        dots.className = 'act-live-dots';
+        dots.innerHTML = '<span></span><span></span><span></span>';
+        label.appendChild(dots);
+    }
+    if (stepText) currentSysToggle.dataset.step = String(stepText);
+    // while expanded the list already shows the steps, so only show the tail when collapsed
+    step.textContent = (live && !currentSysToggle.open) || !live
+        ? (currentSysToggle.dataset.step || '')
+        : '';
+}
+
+function activityText(item) { return item.querySelector('.act-text'); }
+
+function appendActivity(text) {
+    const ev = parseActivity(text);
+    if (ev.kind === 'skip') return;
+    ensureActivityBlock();
+    const list = currentSysToggle.querySelector('.act-list');
+
+    // timing / cost lines annotate the step in flight instead of adding a row
+    if ((ev.kind === 'done' || ev.kind === 'meta') && currentActivityItem) {
+        let badge = activityText(currentActivityItem).querySelector('.act-time');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'act-time';
+            activityText(currentActivityItem).appendChild(badge);
+        }
+        badge.textContent = ' ' + ev.label;
+        currentActivityItem.classList.remove('act-running');
+        updateActivitySummary(null);
+        return;
+    }
+    if (ev.kind === 'purpose' && currentActivityItem) {
+        const p = document.createElement('span');
+        p.className = 'act-purpose';
+        p.textContent = ' — ' + ev.label;
+        activityText(currentActivityItem).appendChild(p);
+        return;
+    }
+    if (ev.kind === 'raw' || ev.kind === 'done' || ev.kind === 'meta') {
+        if (!currentActivityRaw) {
+            currentActivityRaw = document.createElement('div');
+            currentActivityRaw.className = 'act-raw';
+            list.appendChild(currentActivityRaw);
+        }
+        currentActivityRaw.textContent += (currentActivityRaw.textContent ? '\n' : '') + ev.label;
+        currentActivityRaw.scrollTop = currentActivityRaw.scrollHeight;
+        return;
+    }
+
+    sysLogCount++;
+    const item = document.createElement('div');
+    item.className = 'act-item' + (ev.kind === 'ok' ? '' : ' act-running');
+    const icon = document.createElement('span');
+    icon.className = 'act-icon';
+    icon.textContent = ev.icon || '•';
+    const txt = document.createElement('span');
+    txt.className = 'act-text';
+    txt.innerHTML = activityLabelHtml(ev.label);
+    item.appendChild(icon);
+    item.appendChild(txt);
+    list.appendChild(item);
+    if (ev.kind !== 'ok') {
+        if (currentActivityItem) currentActivityItem.classList.remove('act-running');
+        currentActivityItem = item;
+        currentActivityRaw = null;
+    }
+    updateActivitySummary(ev.label);
+}
+
+// Called when the final answer arrived: stop the live state and collapse the trace.
+function finishActivity() {
+    if (!currentSysToggle) return;
+    currentSysToggle.dataset.live = '0';
+    if (currentActivityItem) currentActivityItem.classList.remove('act-running');
+    currentSysToggle.open = false;
+    updateActivitySummary(null);
+    currentSysToggle = null;
+    currentActivityItem = null;
+    currentActivityRaw = null;
+}
+
+// ---- files the agent wrote in this turn ------------------------------------
+// The CLI runs with --trust-all-tools, so the file is already written by the time
+// we hear about it. No pre-approval is possible (in non-interactive mode the CLI
+// rejects a non-trusted tool instead of asking), so we offer diff + revert, backed
+// by the IDE's Local History.
+function ensureFileChangeBlock() {
+    if (currentFileBlock) return currentFileBlock;
+    currentFileBlock = document.createElement('div');
+    currentFileBlock.className = 'file-changes';
+    const head = document.createElement('div');
+    head.className = 'fc-head';
+    currentFileBlock.appendChild(head);
+    const list = document.createElement('div');
+    list.className = 'fc-list';
+    currentFileBlock.appendChild(list);
+    messagesDiv.appendChild(currentFileBlock);
+    return currentFileBlock;
+}
+
+function updateFileChangeHead() {
+    if (!currentFileBlock) return;
+    const n = currentFileBlock.querySelectorAll('.fc-item').length;
+    currentFileBlock.querySelector('.fc-head').textContent =
+        (i18n.filesChanged || 'Files changed') + ' (' + n + ')';
+}
+
+function appendFileChange(path) {
+    if (!path) return;
+    ensureFileChangeBlock();
+    const list = currentFileBlock.querySelector('.fc-list');
+    if (list.querySelector('[data-path="' + CSS.escape(path) + '"]')) return;
+
+    const item = document.createElement('div');
+    item.className = 'fc-item';
+    item.dataset.path = path;
+
+    const name = document.createElement('span');
+    name.className = 'fc-name';
+    name.textContent = path.split('/').pop();
+    name.title = path;
+
+    const dir = document.createElement('span');
+    dir.className = 'fc-dir';
+    dir.textContent = path.substring(0, path.lastIndexOf('/'));
+
+    const actions = document.createElement('span');
+    actions.className = 'fc-actions';
+    const diffBtn = document.createElement('button');
+    diffBtn.className = 'fc-btn';
+    diffBtn.textContent = i18n.viewDiff || 'Diff';
+    diffBtn.onclick = () => fileAction('/api/file-diff', path, item, diffBtn);
+    const revertBtn = document.createElement('button');
+    revertBtn.className = 'fc-btn fc-danger';
+    revertBtn.textContent = i18n.revert || 'Revert';
+    revertBtn.onclick = () => fileAction('/api/file-revert', path, item, revertBtn);
+    actions.appendChild(diffBtn);
+    actions.appendChild(revertBtn);
+
+    item.appendChild(name);
+    item.appendChild(dir);
+    item.appendChild(actions);
+    list.appendChild(item);
+    updateFileChangeHead();
+    scrollToBottom();
+}
+
+function fileAction(endpoint, path, item, btn) {
+    const isRevert = endpoint.indexOf('revert') !== -1;
+    btn.disabled = true;
+    fetch(API + endpoint, { method: 'POST', body: SESSION + '\n' + path })
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) { markFileStatus(item, '⚠ ' + res.error, true); btn.disabled = false; return; }
+            if (isRevert) {
+                item.classList.add('fc-reverted');
+                markFileStatus(item, res.deleted
+                    ? (i18n.deleted || 'deleted')
+                    : (i18n.reverted || 'reverted'), false);
+                item.querySelectorAll('.fc-btn').forEach(b => b.disabled = true);
+            } else {
+                btn.disabled = false;
+            }
+        })
+        .catch(() => { markFileStatus(item, '⚠', true); btn.disabled = false; });
+}
+
+function markFileStatus(item, text, isError) {
+    let tag = item.querySelector('.fc-status');
+    if (!tag) {
+        tag = document.createElement('span');
+        tag.className = 'fc-status';
+        item.querySelector('.fc-actions').before(tag);
+    }
+    tag.classList.toggle('fc-status-error', !!isError);
+    tag.textContent = text;
+}
+
 function appendChunk(chunk) {
     const lines = chunk.split('\n');
     for (const line of lines) {
@@ -828,23 +1169,10 @@ function appendChunk(chunk) {
         const displayLine = isSys ? line.substring(5) : line;
 
         if (isSys) {
-            if (typingIndicator) { typingIndicator.remove(); typingIndicator = null; }
             flushContent();
-            sysLogCount++;
-            if (!currentSysToggle) {
-                currentSysToggle = document.createElement('details');
-                currentSysToggle.className = 'sys-toggle';
-                const summary = document.createElement('summary');
-                summary.textContent = (i18n.systemLog || 'System log') + ' (' + sysLogCount + ')';
-                currentSysToggle.appendChild(summary);
-                const content = document.createElement('div');
-                content.className = 'sys-log-content';
-                currentSysToggle.appendChild(content);
-                messagesDiv.appendChild(currentSysToggle);
-            }
-            currentSysToggle.querySelector('summary').textContent = (i18n.systemLog || 'System log') + ' (' + sysLogCount + ')';
-            const logContent = currentSysToggle.querySelector('.sys-log-content');
-            logContent.textContent += displayLine + '\n';
+            appendActivity(displayLine);
+            // keep the "working" indicator below the trace until real answer text arrives
+            if (typingIndicator) messagesDiv.appendChild(typingIndicator);
         } else {
             currentContent += displayLine + '\n';
         }
@@ -882,6 +1210,7 @@ function addCodeCopyButtons(container) {
 
 function finishAssistantMessage() {
     if (typingIndicator) { typingIndicator.remove(); typingIndicator = null; }
+    finishActivity();
     if (currentAssistantDiv) {
         currentAssistantDiv.classList.remove('streaming');
         if (currentContent.trim()) {
@@ -898,6 +1227,7 @@ function finishAssistantMessage() {
 
 function addErrorMessage(text) {
     if (typingIndicator) { typingIndicator.remove(); typingIndicator = null; }
+    finishActivity();
     ensureAssistantBubble();
     if (currentAssistantDiv) {
         currentAssistantDiv.innerHTML = '<span class="error-text">⚠ ' + escapeHtml(text) + '</span>';
@@ -1029,86 +1359,112 @@ function handleAutocomplete() {
         if (matches.length > 0) { showCommandAutocomplete(matches); return; }
     }
 
-    // # file search autocomplete
-    const hashMatch = before.match(/#([^\s]*)$/);
-    if (hashMatch) {
-        const q = hashMatch[1];
+    // @ mention autocomplete: files + classes/symbols + agents in one menu.
+    // '#' stays supported as a files-only alias (older muscle memory).
+    const mentionMatch = before.match(/[@#]([^\s@#]*)$/);
+    if (mentionMatch) {
+        const q = mentionMatch[1];
+        const filesOnly = before.charAt(before.length - q.length - 1) === '#';
         clearTimeout(acDebounceTimer);
-        acDebounceTimer = setTimeout(() => searchProjectFiles(q), 150);
-        return;
-    }
-
-    // @ agent autocomplete
-    const atMatch = before.match(/@([^\s]*)$/);
-    if (atMatch) {
-        const q = atMatch[1].toLowerCase();
-        if (agents.length === 0) {
-            fetch(API + '/api/agents').then(r => r.json()).then(data => {
-                agents = data;
-                showAgentAutocomplete(q);
-            }).catch(() => {});
-        } else {
-            showAgentAutocomplete(q);
-        }
+        acDebounceTimer = setTimeout(() => searchMentions(q, filesOnly), 150);
         return;
     }
 
     hideAutocomplete();
 }
 
-// project file search
-function searchProjectFiles(query) {
-    const url = query ? API + '/api/project-files?q=' + encodeURIComponent(query) : API + '/api/project-files';
-    fetch(url).then(r => r.json()).then(files => {
-        if (files.length > 0) {
-            showFileSearchAutocomplete(files, query);
-        } else {
-            hideAutocomplete();
-        }
-    }).catch(() => hideAutocomplete());
+// --- mentions (@) ---------------------------------------------------------
+// The CLI itself expands '@<path>' into file context, so every mention is
+// serialized with '@' (see getInputText). '#<path>' is ignored by the CLI.
+function searchMentions(query, filesOnly) {
+    const jobs = [
+        fetch(API + '/api/project-files' + (query ? '?q=' + encodeURIComponent(query) : ''))
+            .then(r => r.json()).catch(() => [])
+    ];
+    if (filesOnly) {
+        jobs.push(Promise.resolve([]), Promise.resolve([]));
+    } else {
+        jobs.push(query.length >= 2
+            ? fetch(API + '/api/project-symbols?q=' + encodeURIComponent(query)).then(r => r.json()).catch(() => [])
+            : Promise.resolve([]));
+        jobs.push(agents.length > 0
+            ? Promise.resolve(agents)
+            : fetch(API + '/api/agents').then(r => r.json()).then(d => { agents = d; return d; }).catch(() => []));
+    }
+
+    Promise.all(jobs).then(res => {
+        const files = res[0] || [];
+        const symbols = res[1] || [];
+        const matchedAgents = (res[2] || []).filter(a => a.name.toLowerCase().includes(query.toLowerCase()));
+        showMentionAutocomplete(query, files, symbols, matchedAgents);
+    });
 }
 
-// show file search autocomplete
-function showFileSearchAutocomplete(files, query) {
-    acType = 'file';
-    autocompleteDiv.innerHTML = ''; acSelectedIndex = 0;
-    files.slice(0, 15).forEach((f, i) => {
-        const item = document.createElement('div');
-        item.className = 'ac-item' + (i === 0 ? ' selected' : '');
-        item.dataset.path = f.path;
-        item.dataset.name = f.name;
-        item.innerHTML = '<span class="ac-icon">' + getFileIcon(f.name) + '</span>' +
-            '<div class="ac-content">' +
-            '<div class="ac-name">' + highlightMatch(f.name, query) + '</div>' +
-            '<div class="ac-secondary">' + escapeHtml(f.dir) + '</div>' +
-            '</div>';
-        item.onclick = () => insertFileContext(f.path, f.name);
-        autocompleteDiv.appendChild(item);
-    });
+function mentionSection(title) {
+    const head = document.createElement('div');
+    head.className = 'ac-section';
+    head.textContent = title;
+    return head;
+}
+
+function mentionItem(icon, name, secondary, query, mtype, value, display) {
+    const item = document.createElement('div');
+    item.className = 'ac-item';
+    item.dataset.mtype = mtype;
+    item.dataset.value = value;
+    item.dataset.display = display;
+    item.innerHTML = '<span class="ac-icon">' + icon + '</span>' +
+        '<div class="ac-content">' +
+        '<div class="ac-name">' + highlightMatch(name, query) + '</div>' +
+        '<div class="ac-secondary">' + escapeHtml(secondary || '') + '</div>' +
+        '</div>';
+    item.onclick = () => insertMention(mtype, value, display);
+    return item;
+}
+
+function symbolIcon(kind) { return kind === 'class' ? '🅒' : '🔡'; }
+
+function showMentionAutocomplete(query, files, symbols, matchedAgents) {
+    acType = 'mention';
+    autocompleteDiv.innerHTML = '';
+
+    const limits = { file: 8, symbol: 8, agent: 4 };
+    if (symbols.length === 0 && matchedAgents.length === 0) limits.file = 15;
+
+    if (symbols.length > 0) {
+        autocompleteDiv.appendChild(mentionSection(i18n.classes || 'Classes & symbols'));
+        symbols.slice(0, limits.symbol).forEach(s => {
+            autocompleteDiv.appendChild(mentionItem(
+                symbolIcon(s.kind), s.name, s.location || s.path, query, 'symbol', s.path, s.name));
+        });
+    }
+    if (files.length > 0) {
+        autocompleteDiv.appendChild(mentionSection(i18n.files || 'Files'));
+        files.slice(0, limits.file).forEach(f => {
+            autocompleteDiv.appendChild(mentionItem(
+                getFileIcon(f.name), f.name, f.dir, query, 'file', f.path, f.name));
+        });
+    }
+    if (matchedAgents.length > 0) {
+        autocompleteDiv.appendChild(mentionSection(i18n.agents || 'Agents'));
+        matchedAgents.slice(0, limits.agent).forEach(a => {
+            const desc = a.description.length > 50 ? a.description.substring(0, 50) + '...' : a.description;
+            autocompleteDiv.appendChild(mentionItem('🤖', a.name, desc, query, 'agent', a.name, a.name));
+        });
+    }
+
+    const items = autocompleteDiv.querySelectorAll('.ac-item');
+    if (items.length === 0) { hideAutocomplete(); return; }
+    acSelectedIndex = 0;
+    updateAcSelection(items);
     positionAutocomplete();
 }
 
-// show agent autocomplete
-function showAgentAutocomplete(query) {
-    acType = 'agent';
-    const matches = agents.filter(a => a.name.toLowerCase().includes(query)).slice(0, 10);
-    if (matches.length === 0) { hideAutocomplete(); return; }
-
-    autocompleteDiv.innerHTML = ''; acSelectedIndex = 0;
-    matches.forEach((a, i) => {
-        const item = document.createElement('div');
-        item.className = 'ac-item' + (i === 0 ? ' selected' : '');
-        item.dataset.name = a.name;
-        const desc = a.description.length > 50 ? a.description.substring(0, 50) + '...' : a.description;
-        item.innerHTML = '<span class="ac-icon">🤖</span>' +
-            '<div class="ac-content">' +
-            '<div class="ac-name">' + highlightMatch(a.name, query) + '</div>' +
-            '<div class="ac-secondary">' + escapeHtml(desc) + '</div>' +
-            '</div>';
-        item.onclick = () => insertAgentContext(a.name);
-        autocompleteDiv.appendChild(item);
-    });
-    positionAutocomplete();
+function insertMention(mtype, value, display) {
+    deleteTextBeforeCursor(/[@#][^\s@#]*$/);
+    // symbols are sent as their containing file: that is what the CLI can expand
+    insertBadgeAtCursor(mtype, value, display);
+    hideAutocomplete(); input.focus();
 }
 
 // highlight matching text
@@ -1204,7 +1560,7 @@ function insertBadgeAtCursor(type, name, displayName) {
     badge.contentEditable = 'false';
     badge.dataset.type = type;
     badge.dataset.name = name;
-    badge.innerHTML = '<span style="opacity:0.7">' + (type === 'file' ? '#' : '@') + '</span>' + escapeHtml(displayName);
+    badge.innerHTML = '<span style="opacity:0.7">@</span>' + escapeHtml(displayName);
 
     range.insertNode(badge);
 
@@ -1217,20 +1573,6 @@ function insertBadgeAtCursor(type, name, displayName) {
     range.collapse(true);
     sel.removeAllRanges();
     sel.addRange(range);
-}
-
-// insert file context badge
-function insertFileContext(path, name) {
-    deleteTextBeforeCursor(/#[^\s]*$/);
-    insertBadgeAtCursor('file', path, name);
-    hideAutocomplete(); input.focus();
-}
-
-// insert agent context badge
-function insertAgentContext(name) {
-    deleteTextBeforeCursor(/@[^\s]*$/);
-    insertBadgeAtCursor('agent', name, name);
-    hideAutocomplete(); input.focus();
 }
 
 function hideAutocomplete() { autocompleteDiv.style.display = 'none'; acSelectedIndex = -1; acType = ''; }
@@ -1291,6 +1633,7 @@ function handleEvent(ev) {
     else if (ev.event === 'chunk') appendChunk(ev.data);
     else if (ev.event === 'done') finishAssistantMessage();
     else if (ev.event === 'error') { if (ev.data) addErrorMessage(ev.data); finishAssistantMessage(); }
+    else if (ev.event === 'file') appendFileChange(ev.data);
 }
 
 function pollEvents() {
