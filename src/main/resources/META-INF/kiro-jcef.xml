@@ -1,0 +1,4 @@
+<!-- com.intellij.modules.jcef optional 의존성용 설정 파일.
+     확장 등록은 없고, 2026.2+에서 JCEF 플러그인 클래스를 이 플러그인의 클래스로더에 연결하는 역할만 한다. -->
+<idea-plugin>
+</idea-plugin>

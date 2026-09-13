@@ -59,8 +59,9 @@ intellijPlatform {
     pluginVerification {
         ides {
             ide(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdeaCommunity, "2025.1")
-            // 2026.2 EAP — 이슈 리포트된 PhpStorm 빌드와 동일
-            ide(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.PhpStorm, "262.8377.43")
+            // 2026.2 정식 릴리즈 — JCEF가 별도 플러그인으로 분리된 이후 빌드
+            ide(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.PhpStorm, "2026.2.2")
+            ide(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.Rider, "2026.2.1", useInstaller = false)
         }
     }
 }

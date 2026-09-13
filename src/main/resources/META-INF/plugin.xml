@@ -27,6 +27,7 @@
     <change-notes><![CDATA[
         <h3>0.2.5</h3>
         <ul>
+            <li>Fix: <code>NoClassDefFoundError: com/intellij/ui/jcef/...</code> on 2026.2+ (IntelliJ, Rider, etc.) &mdash; JCEF became a separate plugin in 2026.2 and is now declared as a dependency</li>
             <li>Show a clear notice instead of an empty panel when the IDE runtime does not support JCEF (required for the chat UI); documented the glibc 2.28+ requirement on Linux</li>
         </ul>
 
@@ -79,6 +80,10 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.terminal</depends>
+    <!-- JCEF: 2026.2부터 분리된 "Web Browser (JCEF)" 플러그인이 이 모듈을 제공하며,
+         선언이 없으면 NoClassDefFoundError: com/intellij/ui/jcef/* 발생.
+         2025.1에는 이 모듈 별칭이 없으므로(JCEF가 플랫폼 내장) optional로 선언 -->
+    <depends optional="true" config-file="kiro-jcef.xml">com.intellij.modules.jcef</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Kiro"
