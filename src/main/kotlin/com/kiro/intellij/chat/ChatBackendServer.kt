@@ -11,12 +11,53 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+
+internal class AsyncSnapshot<T>(
+    initialValue: T,
+    private val loader: () -> T,
+    private val schedule: (() -> Unit) -> Unit,
+    private val onError: (Throwable) -> Unit = {}
+) {
+    @Volatile
+    private var value: T = initialValue
+    private val refreshPending = AtomicBoolean(false)
+
+    fun current(): T = value
+
+    fun currentAndRefresh(): T {
+        val snapshot = value
+        refresh()
+        return snapshot
+    }
+
+    fun refresh() {
+        if (!refreshPending.compareAndSet(false, true)) return
+        try {
+            schedule {
+                try {
+                    value = loader()
+                } catch (t: Throwable) {
+                    onError(t)
+                } finally {
+                    refreshPending.set(false)
+                }
+            }
+        } catch (t: Throwable) {
+            refreshPending.set(false)
+            onError(t)
+        }
+    }
+}
 
 /**
  * 내장 HTTP 서버. JCEF webview와 Kotlin 백엔드 간 통신.
@@ -27,6 +68,12 @@ class ChatBackendServer(private val project: Project, parentDisposable: Disposab
     private val log = Logger.getInstance(ChatBackendServer::class.java)
     private val server: HttpServer
     private val sessions = ConcurrentHashMap<String, ChatSession>()
+    private val openFilesSnapshot = AsyncSnapshot(
+        initialValue = "[]",
+        loader = { buildOpenFilesJson() },
+        schedule = { task -> ApplicationManager.getApplication().invokeLater(task) },
+        onError = { error -> log.debug("Unable to refresh open files snapshot", error) }
+    )
 
     val port: Int
 
@@ -38,6 +85,7 @@ class ChatBackendServer(private val project: Project, parentDisposable: Disposab
 
         server.createContext("/api/send") { exchange -> handleSend(exchange) }
         server.createContext("/api/events") { exchange -> handleEvents(exchange) }
+        server.createContext("/api/messages") { exchange -> handleMessages(exchange) }
         server.createContext("/api/stop") { exchange -> handleStop(exchange) }
         server.createContext("/api/new-session") { exchange -> handleNewSession(exchange) }
         server.createContext("/api/open-files") { exchange -> handleOpenFiles(exchange) }
@@ -52,6 +100,7 @@ class ChatBackendServer(private val project: Project, parentDisposable: Disposab
 
         server.start()
         log.info("Chat backend server started on port $port")
+        openFilesSnapshot.refresh()
 
         // 모델 목록 미리 조회 (~2초 소요) — UI가 요청할 때쯤 캐시가 준비되도록
         com.kiro.intellij.settings.KiroModelProvider.warmUp()
@@ -76,32 +125,50 @@ class ChatBackendServer(private val project: Project, parentDisposable: Disposab
                 return
             }
 
-            val parts = body.split("\n", limit = 2)
-            val sessionId = parts.getOrNull(0) ?: ""
-            val message = parts.getOrNull(1) ?: ""
-
-            if (sessionId.isBlank()) {
+            val request = parseSendRequest(body)
+            if (request.sessionId.isBlank()) {
                 sendResponse(exchange, 400, "Missing session ID")
                 return
             }
-            if (message.isBlank()) {
+            if (request.message.isBlank()) {
                 sendResponse(exchange, 400, "Empty message")
                 return
             }
 
-            val session = sessions[sessionId]
+            val session = sessions[request.sessionId]
             if (session == null) {
-                sendResponse(exchange, 404, "Session not found: $sessionId")
+                sendResponse(exchange, 404, "Session not found: ${request.sessionId}")
                 return
             }
 
-            session.sendMessage(message)
+            session.sendMessage(request.message, request.displayMessage)
             sendResponse(exchange, 200, "ok")
         } catch (e: Exception) {
             log.warn("handleSend error", e)
             sendResponse(exchange, 500, e.message ?: "Internal server error")
         }
     }
+
+    private fun parseSendRequest(body: String): SendRequest {
+        if (body.trimStart().startsWith("{")) {
+            val json = Json.parseToJsonElement(body).jsonObject
+            val sessionId = json["sessionId"]?.jsonPrimitive?.content.orEmpty()
+            val message = json["message"]?.jsonPrimitive?.content.orEmpty()
+            val displayMessage = json["displayMessage"]?.jsonPrimitive?.content ?: message
+            return SendRequest(sessionId, message, displayMessage)
+        }
+
+        val parts = body.split("\n", limit = 2)
+        val sessionId = parts.getOrNull(0).orEmpty()
+        val message = parts.getOrNull(1).orEmpty()
+        return SendRequest(sessionId, message, message)
+    }
+
+    private data class SendRequest(
+        val sessionId: String,
+        val message: String,
+        val displayMessage: String
+    )
 
     /**
      * 이벤트 폴링 endpoint. 커서(after) 이후에 쌓인 세션 이벤트를 JSON 배열로 반환.
@@ -124,6 +191,28 @@ class ChatBackendServer(private val project: Project, parentDisposable: Disposab
 
         val json = session.eventsAfter(after).joinToString(",") { e ->
             "{\"seq\":${e.seq},\"event\":\"${escapeJson(e.event)}\",\"data\":\"${escapeJson(e.data)}\"}"
+        }
+        exchange.responseHeaders.set("Content-Type", "application/json")
+        sendResponse(exchange, 200, "[$json]")
+    }
+
+    private fun handleMessages(exchange: HttpExchange) {
+        setCorsHeaders(exchange)
+        if (exchange.requestMethod == "OPTIONS") { exchange.sendResponseHeaders(200, -1); return }
+
+        val query = exchange.requestURI.query.orEmpty()
+        val sessionId = query.split("&")
+            .firstOrNull { it.startsWith("session=") }
+            ?.substringAfter("=")
+            .orEmpty()
+        val session = sessions[sessionId]
+        if (session == null) {
+            sendResponse(exchange, 404, "Session not found")
+            return
+        }
+
+        val json = session.persistedMessages().joinToString(",") { message ->
+            "{\"role\":\"${escapeJson(message.role)}\",\"content\":\"${escapeJson(message.content)}\",\"timestamp\":${message.timestamp}}"
         }
         exchange.responseHeaders.set("Content-Type", "application/json")
         sendResponse(exchange, 200, "[$json]")
@@ -191,31 +280,25 @@ class ChatBackendServer(private val project: Project, parentDisposable: Disposab
         setCorsHeaders(exchange)
         if (exchange.requestMethod == "OPTIONS") { exchange.sendResponseHeaders(200, -1); return }
 
-        val result = StringBuilder()
-        val latch = CountDownLatch(1)
-        ApplicationManager.getApplication().invokeLater {
-            try {
-                val fem = FileEditorManager.getInstance(project)
-                val basePath = project.basePath ?: ""
-                val activeFile = fem.selectedTextEditor?.virtualFile?.path ?: ""
-                val files = fem.openFiles.map { file ->
-                    val relativePath = if (basePath.isNotEmpty() && file.path.startsWith(basePath))
-                        file.path.removePrefix(basePath).removePrefix("/") else file.path
-                    val isActive = file.path == activeFile
-                    "{\"name\":\"${escapeJson(file.name)}\",\"path\":\"${escapeJson(file.path)}\",\"relativePath\":\"${escapeJson(relativePath)}\",\"active\":$isActive}"
-                }
-                result.append("[${files.joinToString(",")}]")
-            } catch (e: Exception) {
-                result.append("[]")
-            }
-            latch.countDown()
-        }
-        val completed = latch.await(5, TimeUnit.SECONDS)
-        if (!completed) {
-            log.warn("handleOpenFiles timed out after 5s")
-        }
         exchange.responseHeaders.set("Content-Type", "application/json")
-        sendResponse(exchange, 200, if (completed) result.toString() else "[]")
+        sendResponse(exchange, 200, openFilesSnapshot.currentAndRefresh())
+    }
+
+    /** Must run on the IDE event dispatch thread. */
+    private fun buildOpenFilesJson(): String {
+        val fem = FileEditorManager.getInstance(project)
+        val basePath = project.basePath ?: ""
+        val activeFile = fem.selectedTextEditor?.virtualFile?.path ?: ""
+        val files = fem.openFiles.map { file ->
+            val relativePath = if (basePath.isNotEmpty() && file.path.startsWith(basePath)) {
+                file.path.removePrefix(basePath).removePrefix("/")
+            } else {
+                file.path
+            }
+            val isActive = file.path == activeFile
+            "{\"name\":\"${escapeJson(file.name)}\",\"path\":\"${escapeJson(file.path)}\",\"relativePath\":\"${escapeJson(relativePath)}\",\"active\":$isActive}"
+        }
+        return "[${files.joinToString(",")}]"
     }
 
     private fun escapeJson(s: String): String {

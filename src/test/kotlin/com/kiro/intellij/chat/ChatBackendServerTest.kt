@@ -12,6 +12,31 @@ import java.net.URI
 class ChatBackendServerTest {
 
     @Test
+    fun `async snapshot returns cached value immediately and refreshes later`() {
+        val scheduled = mutableListOf<() -> Unit>()
+        var loaded = "fresh"
+        val snapshot = AsyncSnapshot("cached", loader = { loaded }, schedule = { scheduled.add(it) })
+
+        assertEquals("cached", snapshot.currentAndRefresh())
+        assertEquals(1, scheduled.size)
+
+        scheduled.single().invoke()
+        assertEquals("fresh", snapshot.currentAndRefresh())
+    }
+
+    @Test
+    fun `async snapshot coalesces refresh requests while one is pending`() {
+        val scheduled = mutableListOf<() -> Unit>()
+        val snapshot = AsyncSnapshot("[]", loader = { "[1]" }, schedule = { scheduled.add(it) })
+
+        repeat(5) { assertEquals("[]", snapshot.currentAndRefresh()) }
+        assertEquals(1, scheduled.size)
+
+        scheduled.single().invoke()
+        assertEquals("[1]", snapshot.current())
+    }
+
+    @Test
     fun `api events returns buffered events after cursor`() {
         val parent = Disposer.newDisposable()
         try {

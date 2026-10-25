@@ -14,6 +14,7 @@ class KiroSettingsTest {
         assertEquals("en", state.language)
         assertEquals("", state.kiroConfigDir)
         assertEquals("auto", state.theme)
+        assertFalse(state.trustAllTools)
     }
 
     @Test

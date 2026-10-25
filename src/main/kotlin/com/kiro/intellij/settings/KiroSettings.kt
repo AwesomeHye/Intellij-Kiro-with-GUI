@@ -16,7 +16,8 @@ class KiroSettings : PersistentStateComponent<KiroSettings.State> {
         var defaultModel: String = "Auto",
         var language: String = "en", // ko, en
         var kiroConfigDir: String = "", // 빈 문자열이면 기본 경로 (~/.kiro) 사용
-        var theme: String = "auto" // auto, light, dark
+        var theme: String = "auto", // auto, light, dark
+        var trustAllTools: Boolean = false
     )
 
     private var myState = State()

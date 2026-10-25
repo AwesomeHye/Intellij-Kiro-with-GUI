@@ -13,7 +13,6 @@ import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.util.ui.JBUI
 import com.kiro.intellij.settings.KiroSettings
 import java.awt.BorderLayout
-import java.util.UUID
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.SwingConstants
@@ -22,19 +21,26 @@ class ChatPanel(
     private val project: Project,
     private val parentDisposable: Disposable,
     private val backendServer: ChatBackendServer,
-    val tabName: String
+    conversationId: String,
+    private val onConversationChanged: () -> Unit = {}
 ) : Disposable {
 
     private val mainPanel = JPanel(BorderLayout())
     private var browser: JBCefBrowser? = null
-    val sessionId = UUID.randomUUID().toString()
-    private val session = ChatSession(sessionId, project)
+    private val historyService = ChatHistoryService.getInstance(project)
+    val sessionId = conversationId
+    private val session = ChatSession(sessionId, project, historyService, onConversationChanged)
 
+    val tabName: String
+        get() = historyService.getConversation(sessionId)?.title ?: ChatHistoryService.DEFAULT_TITLE
     val component: JComponent get() = mainPanel
 
     init {
         Disposer.register(parentDisposable, this)
-        session.model = KiroSettings.getInstance().state.defaultModel
+        historyService.ensureConversation(sessionId, model = KiroSettings.getInstance().state.defaultModel)
+        if (session.model.isNullOrBlank()) {
+            session.model = KiroSettings.getInstance().state.defaultModel
+        }
         backendServer.registerSession(sessionId, session)
         initBrowser()
     }
@@ -66,7 +72,12 @@ class ChatPanel(
         val initialBodyClass = resolveInitialBodyClass()
         browser = created.also { b ->
             Disposer.register(this, b)
-            val html = buildHtml(backendServer.port, sessionId, initialBodyClass)
+            val html = buildHtml(
+                backendServer.port,
+                sessionId,
+                initialBodyClass,
+                session.model ?: "auto"
+            )
             backendServer.setSessionHtml(sessionId, html)
             b.loadURL("http://127.0.0.1:${backendServer.port}/ui?session=$sessionId")
             mainPanel.add(b.component, BorderLayout.CENTER)
@@ -132,11 +143,20 @@ class ChatPanel(
         backendServer.removeSessionHtml(sessionId)
     }
 
-    internal fun buildHtml(port: Int, sessionId: String, initialBodyClass: String = "theme-dark"): String =
-        buildChatHtml(port, sessionId, initialBodyClass)
+    internal fun buildHtml(
+        port: Int,
+        sessionId: String,
+        initialBodyClass: String = "theme-dark",
+        initialModel: String = "auto"
+    ): String = buildChatHtml(port, sessionId, initialBodyClass, initialModel)
 }
 
-internal fun buildChatHtml(port: Int, sessionId: String, initialBodyClass: String = "theme-dark"): String = """
+internal fun buildChatHtml(
+    port: Int,
+    sessionId: String,
+    initialBodyClass: String = "theme-dark",
+    initialModel: String = "auto"
+): String = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -494,7 +514,7 @@ let openFiles = [];
 let excludedPaths = new Set();
 let attachedImages = [];
 let acSelectedIndex = -1;
-let currentModel = 'auto';
+let currentModel = '$initialModel';
 let projectFiles = [];
 let agents = [];
 let i18n = { placeholder: '', openFile: '', systemLog: '' };
@@ -664,7 +684,12 @@ function sendMessage() {
     attachedImages = []; imagePreview.innerHTML = '';
     setEnabled(false);
     stopDraining = false; // 직전 중지의 드레인이 진행 중이어도 새 메시지 이벤트는 렌더링
-    fetch(API + '/api/send', { method: 'POST', body: SESSION + '\n' + fullMessage })
+    fetch(API + '/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SESSION, message: fullMessage, displayMessage: text })
+    })
+        .then(r => { if (!r.ok) return r.text().then(t => Promise.reject(new Error(t))); })
         .catch(err => { addErrorMessage('Send failed: ' + err.message); setEnabled(true); });
     schedulePoll(); // isStreaming=true 상태이므로 150ms 폴링으로 즉시 전환
 }
@@ -679,6 +704,35 @@ function addUserMessage(text) {
     copyBtn.onclick = () => { navigator.clipboard.writeText(text); copyBtn.textContent = '✓'; setTimeout(() => copyBtn.textContent = '📋', 1000); };
     wrap.appendChild(div); wrap.appendChild(copyBtn);
     messagesDiv.appendChild(wrap); scrollToBottom();
+}
+
+function addRestoredAssistantMessage(text, isError) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap';
+    const div = document.createElement('div');
+    div.className = 'msg assistant';
+    div.innerHTML = isError
+        ? '<span class="error-text">⚠ ' + escapeHtml(text) + '</span>'
+        : renderContent(text);
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn'; copyBtn.textContent = '📋'; copyBtn.title = 'Copy';
+    copyBtn.onclick = () => { navigator.clipboard.writeText(text); copyBtn.textContent = '✓'; setTimeout(() => copyBtn.textContent = '📋', 1000); };
+    wrap.appendChild(div); wrap.appendChild(copyBtn);
+    messagesDiv.appendChild(wrap);
+    if (!isError) addCodeCopyButtons(div);
+}
+
+function loadHistory() {
+    return fetch(API + '/api/messages?session=' + encodeURIComponent(SESSION))
+        .then(r => r.ok ? r.json() : [])
+        .then(history => {
+            history.forEach(message => {
+                if (message.role === 'USER') addUserMessage(message.content);
+                else addRestoredAssistantMessage(message.content, message.role === 'ERROR');
+            });
+            scrollToBottom();
+        })
+        .catch(() => {});
 }
 
 let typingIndicator = null;
@@ -914,7 +968,7 @@ function addCodeCopyButtons(container) {
         btn.onclick = (e) => {
             e.stopPropagation();
             const code = pre.querySelector('code') || pre;
-            navigator.clipboard.writeText(code.textContent);
+            navigator.clipboard.writeText(code.innerText);
             btn.textContent = '✓';
             setTimeout(() => btn.textContent = '📋', 1000);
         };
@@ -1377,16 +1431,19 @@ if (typeof marked !== 'undefined') {
 }
 
 // --- open files ---
+let openFilesRefresh = null;
 function refreshOpenFiles() {
-    fetch(API + '/api/open-files').then(r => r.json()).then(files => {
+    if (openFilesRefresh) return openFilesRefresh;
+    openFilesRefresh = fetch(API + '/api/open-files').then(r => r.json()).then(files => {
         const currentPaths = new Set(files.map(f => f.path));
         for (const p of excludedPaths) { if (!currentPaths.has(p)) excludedPaths.delete(p); }
         openFiles = files;
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => { openFilesRefresh = null; });
+    return openFilesRefresh;
 }
 
 refreshOpenFiles(); setInterval(refreshOpenFiles, 3000);
-initEventPolling(); input.focus();
+loadHistory().finally(() => { initEventPolling(); input.focus(); });
 </script>
 </body>
 </html>

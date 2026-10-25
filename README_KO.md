@@ -27,7 +27,7 @@ IDE의 Tool Window 안에서 kiro-cli와 대화하고, diff viewer, 에디터 �
 git clone https://github.com/AwesomeHye/Intellij-Kiro-with-GUI.git
 cd intellij-kiro-plugin
 ./gradlew buildPlugin
-# 빌드 결과: build/distributions/kiro-with-gui-0.1.0.zip
+# 빌드 결과: build/distributions/kiro-with-gui-0.2.7.zip
 ```
 
 1. IDE에서 **Settings → Plugins → ⚙️ → Install Plugin from Disk...**
@@ -84,8 +84,9 @@ Tool Window의 **Manage** 탭에서:
 | Kiro command | `kiro-cli` | kiro-cli 실행 경로 |
 | Default model | `Auto` | 기본 모델 |
 | Auto-start | `true` | IDE 시작 시 자동 실행 |
-| Language | `ko` | UI 언어 (ko/en) |
+| Language | `en` | UI 언어 (ko/en) |
 | Kiro config dir | (비어있음) | 커스텀 설정 디렉토리 |
+| Trust all tools | `false` | 확인 없이 모든 도구와 명령 실행 허용 |
 
 ### 프로젝트 레벨 (프로젝트별 독립)
 
