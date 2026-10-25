@@ -281,6 +281,10 @@ class KiroCliProcess(
     companion object {
         private const val SESSION_LIST_TIMEOUT_SECONDS = 1L
         private val ANSI_REGEX = Regex("\u001B\\[[0-9;]*[a-zA-Z]|\u001B\\[\\?[0-9]*[a-zA-Z]|\u001B\\[[0-9]*G")
+        private val AGENT_FALLBACK_WARNING = Regex(
+            "^(?:WARNING:\\s*)?agent\\s+.+\\s+not found,\\s+using\\s+.+$",
+            RegexOption.IGNORE_CASE
+        )
 
         internal fun buildChatCommand(
             cliPath: String,
@@ -348,6 +352,8 @@ class KiroCliProcess(
             if (cleaned.startsWith("All tools are now trusted")) return true
             // Agents can sometimes 경고
             if (cleaned.startsWith("Agents can sometimes")) return true
+            // 존재하지 않는 이전 agent 이름을 기본 agent로 대체했다는 경고
+            if (AGENT_FALLBACK_WARNING.matches(cleaned)) return true
             // Learn more at 링크
             if (cleaned.startsWith("Learn more at https://")) return true
             // 로딩 스피너 (캐리지 리턴 포함)
