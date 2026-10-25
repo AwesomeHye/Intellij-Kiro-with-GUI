@@ -4,6 +4,10 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.kiro.intellij.settings.KiroCliResolver
 import com.kiro.intellij.settings.KiroSettings
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -11,13 +15,18 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * kiro-cli를 매 메시지마다 --no-interactive로 실행.
- * --resume으로 대화를 이어간다.
+ * 저장된 CLI 세션 ID가 있으면 --resume-id로 정확한 대화를 이어간다.
  * 출력을 실시간 스트리밍하여 콜백으로 전달.
  */
-class KiroCliProcess(private val project: Project) {
+class KiroCliProcess(
+    private val project: Project,
+    initialSessionId: String? = null,
+    private val onSessionIdChanged: (String?) -> Unit = {}
+) {
 
     private val log = Logger.getInstance(KiroCliProcess::class.java)
-    private var isFirstMessage = true
+    private var cliSessionId: String? = initialSessionId
+    private var isFirstMessage = initialSessionId == null
     private val isBusy = AtomicBoolean(false)
     private val consecutiveErrors = AtomicInteger(0)
     private var currentProcess: Process? = null
@@ -56,21 +65,22 @@ class KiroCliProcess(private val project: Project) {
 
                 val settings = KiroSettings.getInstance().state
                 val cliPath = validation.cliPath ?: settings.kiroCommand
-                val command = mutableListOf(cliPath, "chat", "--no-interactive", "--trust-all-tools")
-
-                if (!isFirstMessage) {
-                    command.add("--resume")
-                }
-
-                val effectiveModel = model ?: settings.defaultModel
-                // kiro-cli의 모델 id는 소문자 "auto" — 레거시 저장값 "Auto"도 함께 처리
-                if (!effectiveModel.equals("auto", ignoreCase = true)) {
-                    command.addAll(listOf("--model", effectiveModel))
-                }
-
-                command.add(message)
-
                 val workingDir = project.basePath ?: System.getProperty("user.home")
+                val sessionsBefore = if (cliSessionId == null) {
+                    listCliSessions(cliPath, workingDir).map { it.id }.toSet()
+                } else {
+                    emptySet()
+                }
+                val effectiveModel = model ?: settings.defaultModel
+                val command = buildChatCommand(
+                    cliPath = cliPath,
+                    message = message,
+                    resumeId = cliSessionId,
+                    isFirstMessage = isFirstMessage,
+                    model = effectiveModel,
+                    trustAllTools = settings.trustAllTools
+                )
+
                 val pb = ProcessBuilder(command)
                     .directory(File(workingDir))
                     .redirectErrorStream(true)
@@ -101,7 +111,17 @@ class KiroCliProcess(private val project: Project) {
                     consecutiveErrors.incrementAndGet()
                 } else {
                     val exitCode = process.exitValue()
-                    isFirstMessage = false
+
+                    if (exitCode == 0) {
+                        isFirstMessage = false
+                        if (cliSessionId == null) {
+                            val discovered = discoverCreatedSession(cliPath, workingDir, sessionsBefore)
+                            if (discovered != null) {
+                                cliSessionId = discovered
+                                onSessionIdChanged(discovered)
+                            }
+                        }
+                    }
 
                     if (exitCode != 0 && exitCode != 130 && exitCode != 143) {
                         val errorMsg = classifyExitCode(exitCode, hasOutput)
@@ -201,14 +221,94 @@ class KiroCliProcess(private val project: Project) {
     }
 
     fun resetSession() {
+        cliSessionId = null
         isFirstMessage = true
         consecutiveErrors.set(0)
+        onSessionIdChanged(null)
+    }
+
+    private fun discoverCreatedSession(cliPath: String, workingDir: String, sessionsBefore: Set<String>): String? {
+        return listCliSessions(cliPath, workingDir)
+            .asSequence()
+            .filter { it.source == "v2" && it.id !in sessionsBefore }
+            .maxByOrNull { it.updatedAt }
+            ?.id
+    }
+
+    private fun listCliSessions(cliPath: String, workingDir: String): List<CliSessionInfo> {
+        return try {
+            val processBuilder = ProcessBuilder(
+                cliPath,
+                "chat",
+                "--list-sessions",
+                "--format",
+                "json"
+            )
+                .directory(File(workingDir))
+                .redirectErrorStream(true)
+            KiroCliResolver.configureProcessBuilder(processBuilder)
+            val process = processBuilder.start()
+            if (!process.waitFor(SESSION_LIST_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.toHandle().descendants().forEach { it.destroyForcibly() }
+                process.destroyForcibly()
+                process.waitFor(1, TimeUnit.SECONDS)
+                return emptyList()
+            }
+            if (process.exitValue() != 0) return emptyList()
+
+            val root = Json.parseToJsonElement(process.inputStream.bufferedReader().readText()).jsonArray
+            root.flatMap { envelope ->
+                envelope.jsonObject["sessions"]?.jsonArray.orEmpty().mapNotNull { element ->
+                    val session = element.jsonObject
+                    val id = session["sessionId"]?.jsonPrimitive?.content.orEmpty()
+                    if (id.isBlank()) null else CliSessionInfo(
+                        id = id,
+                        source = session["source"]?.jsonPrimitive?.content.orEmpty(),
+                        updatedAt = session["updatedAt"]?.jsonPrimitive?.content.orEmpty()
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            log.debug("Unable to list kiro-cli sessions", e)
+            emptyList()
+        }
     }
 
     fun getConsecutiveErrors(): Int = consecutiveErrors.get()
 
+    private data class CliSessionInfo(val id: String, val source: String, val updatedAt: String)
+
     companion object {
+        private const val SESSION_LIST_TIMEOUT_SECONDS = 1L
         private val ANSI_REGEX = Regex("\u001B\\[[0-9;]*[a-zA-Z]|\u001B\\[\\?[0-9]*[a-zA-Z]|\u001B\\[[0-9]*G")
+        private val AGENT_FALLBACK_WARNING = Regex(
+            "^(?:WARNING:\\s*)?agent\\s+.+\\s+not found,\\s+using\\s+.+$",
+            RegexOption.IGNORE_CASE
+        )
+
+        internal fun buildChatCommand(
+            cliPath: String,
+            message: String,
+            resumeId: String?,
+            isFirstMessage: Boolean,
+            model: String,
+            trustAllTools: Boolean
+        ): List<String> = buildList {
+            addAll(listOf(cliPath, "chat", "--v2", "--no-interactive"))
+            if (trustAllTools) add("--trust-all-tools")
+
+            if (resumeId != null) {
+                addAll(listOf("--resume-id", resumeId))
+            } else if (!isFirstMessage) {
+                add("--resume")
+            }
+
+            // kiro-cli의 모델 id는 소문자 "auto" — 레거시 저장값 "Auto"도 함께 처리
+            if (!model.equals("auto", ignoreCase = true)) {
+                addAll(listOf("--model", model))
+            }
+            add(message)
+        }
 
         fun stripAnsi(text: String): String {
             return ANSI_REGEX.replace(text, "")
@@ -252,6 +352,8 @@ class KiroCliProcess(private val project: Project) {
             if (cleaned.startsWith("All tools are now trusted")) return true
             // Agents can sometimes 경고
             if (cleaned.startsWith("Agents can sometimes")) return true
+            // 존재하지 않는 이전 agent 이름을 기본 agent로 대체했다는 경고
+            if (AGENT_FALLBACK_WARNING.matches(cleaned)) return true
             // Learn more at 링크
             if (cleaned.startsWith("Learn more at https://")) return true
             // 로딩 스피너 (캐리지 리턴 포함)

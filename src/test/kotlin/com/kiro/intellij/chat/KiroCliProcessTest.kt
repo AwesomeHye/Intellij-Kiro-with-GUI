@@ -29,6 +29,37 @@ class KiroCliProcessTest {
     }
 
     @Test
+    fun `chat command should not trust all tools by default`() {
+        val command = KiroCliProcess.buildChatCommand(
+            cliPath = "/path/to/kiro-cli",
+            message = "hello",
+            resumeId = null,
+            isFirstMessage = true,
+            model = "Auto",
+            trustAllTools = false
+        )
+
+        assertFalse(command.contains("--trust-all-tools"))
+        assertEquals("hello", command.last())
+    }
+
+    @Test
+    fun `chat command should trust all tools only when enabled`() {
+        val command = KiroCliProcess.buildChatCommand(
+            cliPath = "/path/to/kiro-cli",
+            message = "hello",
+            resumeId = "session-1",
+            isFirstMessage = false,
+            model = "claude-sonnet-4.5",
+            trustAllTools = true
+        )
+
+        assertTrue(command.contains("--trust-all-tools"))
+        assertTrue(command.containsAll(listOf("--resume-id", "session-1", "--model", "claude-sonnet-4.5")))
+        assertEquals("hello", command.last())
+    }
+
+    @Test
     fun `stopped run does not emit late done or chunks`(@TempDir tempDir: Path) {
         val script = File(tempDir.toFile(), "fake-kiro").apply {
             writeText("#!/bin/sh\necho first line\nsleep 5\necho late line\n")

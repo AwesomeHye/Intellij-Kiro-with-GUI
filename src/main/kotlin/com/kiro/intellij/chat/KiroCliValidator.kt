@@ -129,7 +129,7 @@ object KiroCliValidator {
 
     fun checkAuthentication(cliPath: String): Boolean {
         return try {
-            val process = ProcessBuilder(cliPath, "auth", "status")
+            val process = ProcessBuilder(authenticationCommand(cliPath))
                 .redirectErrorStream(true)
                 .start()
             val completed = process.waitFor(10, TimeUnit.SECONDS)
@@ -138,14 +138,19 @@ object KiroCliValidator {
                 return false
             }
             val output = process.inputStream.bufferedReader().readText()
-            process.exitValue() == 0 &&
-                !output.contains("not logged in", ignoreCase = true) &&
-                !output.contains("error", ignoreCase = true)
+            isAuthenticatedOutput(output, process.exitValue())
         } catch (e: Exception) {
             log.debug("Auth check failed for $cliPath", e)
             false
         }
     }
+
+    internal fun authenticationCommand(cliPath: String): List<String> = listOf(cliPath, "whoami")
+
+    internal fun isAuthenticatedOutput(output: String, exitCode: Int): Boolean =
+        exitCode == 0 && output.isNotBlank() &&
+            !output.contains("not logged in", ignoreCase = true) &&
+            !output.contains("error", ignoreCase = true)
 
     private val VERSION_REGEX = Regex("""\d+\.\d+(\.\d+)?(-[\w.]+)?""")
 }

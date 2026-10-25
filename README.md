@@ -27,7 +27,7 @@ Chat with kiro-cli directly inside your IDE, with diff viewer, editor context, a
 git clone https://github.com/AwesomeHye/Intellij-Kiro-with-GUI.git
 cd intellij-kiro-plugin
 ./gradlew buildPlugin
-# Output: build/distributions/kiro-with-gui-0.1.0.zip
+# Output: build/distributions/kiro-with-gui-0.2.7.zip
 ```
 
 1. **Settings → Plugins → ⚙️ → Install Plugin from Disk...**
@@ -84,8 +84,9 @@ In the **Manage** tab of the Tool Window:
 | Kiro command | `kiro-cli` | kiro-cli executable path |
 | Default model | `Auto` | Default model |
 | Auto-start | `true` | Auto-start on IDE launch |
-| Language | `ko` | UI language (ko/en) |
+| Language | `en` | UI language (ko/en) |
 | Kiro config dir | (empty) | Custom config directory |
+| Trust all tools | `false` | Allow all tools and commands without confirmation |
 
 ### Project Level (Per-project)
 

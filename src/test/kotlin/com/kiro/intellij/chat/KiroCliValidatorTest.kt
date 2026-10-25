@@ -40,6 +40,23 @@ class KiroCliValidatorTest {
     }
 
     @Test
+    fun `authentication command should use whoami supported by current CLI`() {
+        assertEquals(listOf("/path/to/kiro-cli", "whoami"), KiroCliValidator.authenticationCommand("/path/to/kiro-cli"))
+    }
+
+    @Test
+    fun `successful non-empty whoami output should be authenticated`() {
+        assertTrue(KiroCliValidator.isAuthenticatedOutput("User: test@example.com", 0))
+    }
+
+    @Test
+    fun `failed or error whoami output should not be authenticated`() {
+        assertFalse(KiroCliValidator.isAuthenticatedOutput("", 0))
+        assertFalse(KiroCliValidator.isAuthenticatedOutput("error: not logged in", 0))
+        assertFalse(KiroCliValidator.isAuthenticatedOutput("User: test@example.com", 1))
+    }
+
+    @Test
     fun `ValidationResult isReady should be true when cli found and no error`() {
         val result = KiroCliValidator.ValidationResult(
             cliFound = true,

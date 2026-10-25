@@ -61,6 +61,7 @@ class SettingsPanel(private val project: Project) {
     private val themeComboBox = JComboBox(arrayOf("Auto", "Light", "Dark"))
     private val themeMap = mapOf("Auto" to "auto", "Light" to "light", "Dark" to "dark")
     private val reverseThemeMap = mapOf("auto" to "Auto", "light" to "Light", "dark" to "Dark")
+    private val trustAllToolsCheckBox = JCheckBox(KiroMessages["settings.trustAllTools"])
 
     private lateinit var configDirActivePathLabel: JBLabel
 
@@ -232,6 +233,24 @@ class SettingsPanel(private val project: Project) {
             add(contentPanel, BorderLayout.CENTER)
         }
 
+        // 도구 승인 카드 — 보안을 위해 기본값은 비활성
+        val toolApprovalCard = KiroUI.createCard().apply {
+            add(KiroUI.createCardHeader(KiroMessages["settings.trustAllTools"]), BorderLayout.NORTH)
+
+            val contentPanel = JPanel(BorderLayout()).apply {
+                isOpaque = false
+                border = JBUI.Borders.empty(KiroUI.Spacing.large)
+            }
+            trustAllToolsCheckBox.isOpaque = false
+            contentPanel.add(trustAllToolsCheckBox, BorderLayout.NORTH)
+            contentPanel.add(JBLabel(KiroMessages["settings.trustAllToolsDesc"]).apply {
+                foreground = JBColor.gray
+                border = JBUI.Borders.emptyTop(KiroUI.Spacing.medium)
+            }, BorderLayout.CENTER)
+
+            add(contentPanel, BorderLayout.CENTER)
+        }
+
         // 버튼 패널
         val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, KiroUI.Spacing.medium, 0)).apply {
             isOpaque = false
@@ -265,6 +284,7 @@ class SettingsPanel(private val project: Project) {
         modelCard.alignmentX = Component.LEFT_ALIGNMENT
         languageCard.alignmentX = Component.LEFT_ALIGNMENT
         themeCard.alignmentX = Component.LEFT_ALIGNMENT
+        toolApprovalCard.alignmentX = Component.LEFT_ALIGNMENT
         buttonPanel.alignmentX = Component.LEFT_ALIGNMENT
 
         contentWrapper.add(headerLabel)
@@ -277,6 +297,8 @@ class SettingsPanel(private val project: Project) {
         contentWrapper.add(languageCard)
         contentWrapper.add(Box.createVerticalStrut(KiroUI.Spacing.large))
         contentWrapper.add(themeCard)
+        contentWrapper.add(Box.createVerticalStrut(KiroUI.Spacing.large))
+        contentWrapper.add(toolApprovalCard)
         contentWrapper.add(buttonPanel)
         contentWrapper.add(Box.createVerticalGlue())
 
@@ -294,6 +316,7 @@ class SettingsPanel(private val project: Project) {
         selectModelItem(state.defaultModel)
         languageComboBox.selectedItem = reverseLanguageMap[state.language] ?: "English"
         themeComboBox.selectedItem = reverseThemeMap[state.theme] ?: "Auto"
+        trustAllToolsCheckBox.isSelected = state.trustAllTools
         updateConfigDirLabel(state.kiroConfigDir)
     }
 
@@ -312,6 +335,7 @@ class SettingsPanel(private val project: Project) {
         settings.state.defaultModel = modelComboBox.selectedItem as String
         settings.state.language = newLanguage
         settings.state.theme = newTheme
+        settings.state.trustAllTools = trustAllToolsCheckBox.isSelected
 
         updateConfigDirLabel(settings.state.kiroConfigDir)
 

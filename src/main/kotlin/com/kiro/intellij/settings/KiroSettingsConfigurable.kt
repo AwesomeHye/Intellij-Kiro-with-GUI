@@ -10,6 +10,7 @@ class KiroSettingsConfigurable : Configurable {
 
     private var commandField: TextFieldWithBrowseButton? = null
     private var modelCombo: javax.swing.JComboBox<String>? = null
+    private var trustAllToolsCheckBox: javax.swing.JCheckBox? = null
 
     override fun getDisplayName(): String = "Kiro"
 
@@ -35,9 +36,14 @@ class KiroSettingsConfigurable : Configurable {
             }
         }
 
+        trustAllToolsCheckBox = javax.swing.JCheckBox("Allow all tools without confirmation").apply {
+            isSelected = settings.trustAllTools
+        }
+
         return panel {
             row("Kiro command:") { cell(commandField!!) }
             row("Default model:") { cell(modelCombo!!) }
+            row("Tool permissions:") { cell(trustAllToolsCheckBox!!) }
         }
     }
 
@@ -54,13 +60,15 @@ class KiroSettingsConfigurable : Configurable {
         val settings = KiroSettings.getInstance().state
         return commandField?.text != settings.kiroCommand
                 || modelCombo?.selectedItem != settings.defaultModel
+                || trustAllToolsCheckBox?.isSelected != settings.trustAllTools
     }
 
     override fun apply() {
         val settings = KiroSettings.getInstance()
-        settings.loadState(KiroSettings.State(
+        settings.loadState(settings.state.copy(
             kiroCommand = commandField?.text ?: "kiro-cli",
-            defaultModel = modelCombo?.selectedItem as? String ?: "Auto"
+            defaultModel = modelCombo?.selectedItem as? String ?: "Auto",
+            trustAllTools = trustAllToolsCheckBox?.isSelected ?: false
         ))
     }
 
@@ -68,10 +76,12 @@ class KiroSettingsConfigurable : Configurable {
         val settings = KiroSettings.getInstance().state
         commandField?.text = settings.kiroCommand
         modelCombo?.let { selectItemIgnoreCase(it, settings.defaultModel) }
+        trustAllToolsCheckBox?.isSelected = settings.trustAllTools
     }
 
     override fun disposeUIResources() {
         commandField = null
         modelCombo = null
+        trustAllToolsCheckBox = null
     }
 }

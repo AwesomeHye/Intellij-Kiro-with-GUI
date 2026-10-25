@@ -116,6 +116,7 @@ class KiroMessagesTest {
             "settings.defaultModel", "settings.defaultModelDesc",
             "settings.language", "settings.languageDesc",
             "settings.theme", "settings.themeDesc",
+            "settings.trustAllTools", "settings.trustAllToolsDesc",
             "settings.save", "settings.reset", "settings.openConfig",
             "settings.saved", "settings.saveComplete",
             "settings.resetConfirm", "settings.resetTitle",

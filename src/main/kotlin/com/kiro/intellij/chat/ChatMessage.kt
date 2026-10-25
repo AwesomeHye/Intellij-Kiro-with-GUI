@@ -5,5 +5,5 @@ data class ChatMessage(
     val content: String,
     val timestamp: Long = System.currentTimeMillis()
 ) {
-    enum class Role { USER, ASSISTANT }
+    enum class Role { USER, ASSISTANT, ERROR }
 }
